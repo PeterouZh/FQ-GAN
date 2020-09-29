@@ -6,7 +6,7 @@
 
     Let's go.
 """
-
+import logging
 import os
 import functools
 import math
@@ -29,10 +29,14 @@ import losses
 import train_fns
 from sync_batchnorm import patch_replication_callback
 
+from template_lib.v2.config import update_parser_defaults_from_yaml, global_cfg
+from template_lib.v2.logger import global_textlogger, summary_dict2txtfig, summary_defaultdict2txtfig
+import template_lib.v2.GAN.evaluation.tf_FID_IS_score
+
 # The main training file. Config is a dictionary specifying the configuration
 # of this training run.
 def run(config):
-
+  logger = logging.getLogger('tl')
   # Update the config dict as necessary
   # This is for convenience, to add settings derived from the user-specified
   # configuration into the config-dict (e.g. inferring the number of classes
@@ -88,8 +92,8 @@ def run(config):
     D = D.half()
     # Consider automatically reducing SN_eps?
   GD = model.G_D(G, D)
-  print(G)
-  print(D)
+  logger.info(G)
+  logger.info(D)
   print('Number of params in G: {} D: {}'.format(
     *[sum([p.data.nelement() for p in net.parameters()]) for net in [G,D]]))
   # Prepare state dict, which holds things like epoch # and itr #
@@ -134,7 +138,10 @@ def run(config):
                                       'start_itr': state_dict['itr']})
 
   # Prepare inception metrics: FID and IS
-  get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
+  # get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
+  if global_cfg.get('test_every_epoch', 0) > 0:
+    # get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
+    get_inception_metrics = inception_utils.prepare_FID_IS(global_cfg)
 
   # Prepare noise and randomly sampled label arrays
   # Allow for different batch sizes in G
@@ -158,7 +165,7 @@ def run(config):
   sample = functools.partial(utils.sample,
                               G=(G_ema if config['ema'] and config['use_ema']
                                  else G),
-                              z_=z_, y_=y_, config=config)
+                              z_=z_, y_=y_, config=config, return_y=False)
 
   print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
@@ -181,8 +188,10 @@ def run(config):
         x, y = x.to(device).half(), y.to(device)
       else:
         x, y = x.to(device), y.to(device)
-      metrics = train(x, y)
+      metrics, default_dict = train(x, y)
       train_log.log(itr=int(state_dict['itr']), **metrics)
+      summary_defaultdict2txtfig(default_dict, prefix='train', step=state_dict['itr'],
+                                 textlogger=global_textlogger)
       
       # Every sv_log_interval, log singular values
       if (config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval'])):
@@ -206,7 +215,8 @@ def run(config):
                                   state_dict, config, experiment_name)
 
       # Test every specified interval
-      if not (state_dict['itr'] % config['test_every']):
+      if not (state_dict['itr'] % config['test_every']) or state_dict['itr']==1 or \
+            state_dict['itr'] % (global_cfg.get('test_every_epoch', float('inf')) * len(loaders[0])) == 0:
         if config['G_eval_mode']:
           print('Switchin G to eval mode...')
           G.eval()
@@ -219,6 +229,9 @@ def run(config):
 def main():
   # parse command line and run
   parser = utils.prepare_parser()
+
+  update_parser_defaults_from_yaml(parser)
+
   config = vars(parser.parse_args())
   print(config)
   run(config)

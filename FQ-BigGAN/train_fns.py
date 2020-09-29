@@ -1,6 +1,8 @@
 ''' train_fns.py
 Functions for the main loop of training different conditional image models
 '''
+import collections
+
 import torch
 import torch.nn as nn
 import torchvision
@@ -17,6 +19,7 @@ def dummy_training_function():
   return train
 
 def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
+  default_dict = collections.defaultdict(dict)
   def train(x, y):
     G.optim.zero_grad()
     D.optim.zero_grad()
@@ -95,8 +98,14 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
            'Quant_loss': float(quant_loss_G.mean().item()),
            'Perplexity': float(ppl.mean().item())
            }
+    default_dict.clear()
+    default_dict['D_loss']['D_loss_real'] = D_loss_real.item()
+    default_dict['D_loss']['D_loss_fake'] = D_loss_fake.item()
+    default_dict['D_loss']['G_loss'] = G_loss.item()
+    default_dict['quant_loss_G']['quant_loss_G'] = quant_loss_G.mean().item()
+    default_dict['ppl']['ppl'] = ppl.mean().item()
     # Return G's loss and the components of D's loss.
-    return out
+    return out, default_dict
   return train
 
 ''' This function takes in the model, saves the weights (multiple copies if 

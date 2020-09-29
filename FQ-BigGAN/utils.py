@@ -551,7 +551,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
                      **kwargs):
 
   # Append /FILENAME.hdf5 to root if using hdf5
-  data_root += '/%s' % root_dict[dataset]
+  # data_root += '/%s' % root_dict[dataset]
   print('Using dataset root location %s' % data_root)
 
   which_dataset = dset_dict[dataset]
@@ -618,7 +618,7 @@ def seed_rng(seed):
 def update_config_roots(config):
   if config['base_root']:
     print('Pegging all root folders to base root %s' % config['base_root'])
-    for key in ['data', 'weights', 'logs', 'samples']:
+    for key in ['weights', 'logs', 'samples']:
       config['%s_root' % key] = '%s/%s' % (config['base_root'], key)
   return config
 
@@ -628,7 +628,7 @@ def prepare_root(config):
   for key in ['weights_root', 'logs_root', 'samples_root']:
     if not os.path.exists(config[key]):
       print('Making directory %s for %s...' % (config[key], key))
-      os.mkdir(config[key])
+      os.makedirs(config[key], exist_ok=True)
 
 
 # Simple wrapper that applies EMA to a model. COuld be better done in 1.0 using
@@ -885,7 +885,7 @@ def progress(items, desc='', total=None, min_delay=0.1, displaytype='s1k'):
 
 
 # Sample function for use with inception metrics
-def sample(G, z_, y_, config):
+def sample(G, z_, y_, config, return_y=True):
   with torch.no_grad():
     z_.sample_()
     y_.sample_()
@@ -893,7 +893,10 @@ def sample(G, z_, y_, config):
       G_z =  nn.parallel.data_parallel(G, (z_, G.shared(y_)))
     else:
       G_z = G(z_, G.shared(y_))
+  if return_y:
     return G_z, y_
+  else:
+    return G_z
 
 
 # Sample function for sample sheets
