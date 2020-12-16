@@ -29,7 +29,8 @@ import losses
 import train_fns
 from sync_batchnorm import patch_replication_callback
 
-from template_lib.v2.config import update_parser_defaults_from_yaml, global_cfg
+# from template_lib.v2.config import update_parser_defaults_from_yaml, global_cfg
+from template_lib.v2.config_cfgnode import update_parser_defaults_from_yaml, global_cfg
 from template_lib.v2.logger import global_textlogger, summary_dict2txtfig, summary_defaultdict2txtfig
 import template_lib.v2.GAN.evaluation.tf_FID_IS_score
 
@@ -139,9 +140,12 @@ def run(config):
 
   # Prepare inception metrics: FID and IS
   # get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
-  if global_cfg.get('test_every_epoch', 0) > 0:
+  if global_cfg.get('use_official_eval', True):
     # get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
     get_inception_metrics = inception_utils.prepare_FID_IS(global_cfg)
+  else:
+    get_inception_metrics = inception_utils.prepare_inception_metrics(
+      global_cfg.inception_file, config['parallel'], config['no_fid'])
 
   # Prepare noise and randomly sampled label arrays
   # Allow for different batch sizes in G
@@ -161,11 +165,16 @@ def run(config):
   # Else, assume debugging and use the dummy train fn
   else:
     train = train_fns.dummy_training_function()
+
   # Prepare Sample function for use with inception metrics
+  if global_cfg.get('use_official_eval', True):
+    return_y = False
+  else:
+    return_y = True
   sample = functools.partial(utils.sample,
                               G=(G_ema if config['ema'] and config['use_ema']
                                  else G),
-                              z_=z_, y_=y_, config=config, return_y=False)
+                              z_=z_, y_=y_, config=config, return_y=return_y)
 
   print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.

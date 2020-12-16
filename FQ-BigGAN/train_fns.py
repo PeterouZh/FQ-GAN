@@ -42,10 +42,9 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
         z_.sample_()
         y_.sample_()
 
-        D_fake, D_real, quant_loss_real, quant_loss_fake, ppl = GD(z_[:config['batch_size']],
-                                                               y_[:config[
-            'batch_size']],
-                            x[counter], y[counter], train_G=False, split_D=config['split_D'])
+        D_fake, D_real, quant_loss_real, quant_loss_fake, ppl = GD(
+          z_[:config['batch_size']], y_[:config['batch_size']],
+          x[counter], y[counter], train_G=False, split_D=config['split_D'])
          
         # Compute components of D's loss, average them, and divide by 
         # the number of gradient accumulations
